@@ -1,14 +1,18 @@
-FROM alpine:edge
+# 1 этап: берем готовый бинарник xray
+FROM teddysun/xray:latest AS xray-bin
 
-RUN apk add --no-cache xray caddy gettext curl jq
+# 2 этап: базовый образ с caddy
+FROM alpine:latest
+
+# Копируем бинарник Xray
+COPY --from=xray-bin /usr/bin/xray /usr/bin/xray
+
+# Устанавливаем caddy, envsubst (пакет gettext), curl и jq
+RUN apk add --no-cache caddy gettext curl jq
 
 WORKDIR /app
 
-COPY Caddyfile.template /app/Caddyfile.template
-COPY xray.template.json /app/xray.template.json
-COPY singbox-client.template.json /app/singbox-client.template.json
 COPY entrypoint.sh /app/entrypoint.sh
-
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
