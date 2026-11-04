@@ -4,8 +4,13 @@ export PORT="${PORT:-8080}"
 export UUID="${UUID:-b831381d-6324-4d53-ad4f-8cda48b30811}"
 export WSPATH="${WSPATH:-/vless-ws}"
 export SUB_PATH="${SUB_PATH:-user-key-771a}"
-# Подставляем реальный домен Railway
 export SERVER_DOMAIN="${RAILWAY_PUBLIC_DOMAIN:-probable-fiesta-production-cb96.up.railway.app}"
+
+# Название сервера: берется из переменной SERVER_NAME или подставляется дефолтное
+export SERVER_NAME="${SERVER_NAME:-Railway-VLESS}"
+
+# URL-кодирование для корректного отображения пробелов и кириллицы в названии
+ENCODED_SERVER_NAME=$(echo -n "${SERVER_NAME}" | jq -s -R -r @uri)
 
 mkdir -p /app/public
 
@@ -45,17 +50,15 @@ cat <<EOF > /app/xray.json
 }
 EOF
 
-# 2. Формирование универсальной ссылки vless:// и Base64 подписки
-VLESS_URL="vless://${UUID}@${SERVER_DOMAIN}:443?encryption=none&security=tls&sni=${SERVER_DOMAIN}&type=ws&path=${WSPATH}#Railway-VLESS"
+# 2. Формирование ссылки vless:// с настраиваемым именем
+VLESS_URL="vless://${UUID}@${SERVER_DOMAIN}:443?encryption=none&security=tls&sni=${SERVER_DOMAIN}&type=ws&path=${WSPATH}#${ENCODED_SERVER_NAME}"
 
-# Сохраняем и чистую ссылку, и base64 версию
 echo "${VLESS_URL}" > /app/public/sub.txt
 echo -n "${VLESS_URL}" | base64 | tr -d '\n' > /app/public/sub_b64.txt
 
-# 3. Конфигурация Caddy для отдачи подписки
+# 3. Конфигурация Caddy
 cat <<EOF > /app/Caddyfile
 :${PORT} {
-    # Отдача подписки для приложений (Hiddify, v2rayNG, NekoBox)
     handle /sub/${SUB_PATH} {
         header Content-Type "text/plain; charset=utf-8"
         file_server {
@@ -64,7 +67,6 @@ cat <<EOF > /app/Caddyfile
         rewrite * /sub.txt
     }
 
-    # Проброс входящего VLESS WebSocket трафика
     handle ${WSPATH}* {
         reverse_proxy 127.0.0.1:10000
     }
@@ -76,6 +78,7 @@ cat <<EOF > /app/Caddyfile
 EOF
 
 echo "=================================================="
+echo "Server Label: ${SERVER_NAME}"
 echo "VLESS Link: ${VLESS_URL}"
 echo "Subscription URL: https://${SERVER_DOMAIN}/sub/${SUB_PATH}"
 echo "=================================================="
